@@ -54,6 +54,21 @@ module HashMapper
     self.maps << Map.new(from, to, using)
     to.filter = filter if block_given? # Useful if just one block given
   end
+  # find_map_from(from
+  def find_from_paths(path)
+    from_paths = []
+    self.maps.each do |map|
+      from_paths << map.path_from if map.path_to.path == path
+    end
+    from_paths
+  end
+  def find_to_paths(path)
+    to_paths = []
+    self.maps.each do |map|
+      to_paths << map.path_to if map.path_from.path == path
+    end
+    to_paths
+  end
 
   def from(path, &filter)
     path_map = PathMap.new(path)
@@ -69,6 +84,10 @@ module HashMapper
 
   def normalize(a_hash)
     perform_hash_mapping a_hash, :normalize
+  end
+
+  def update(hash_to_update, updating_hash)
+    perform_hash_updating(hash_to_update, updating_hash)
   end
 
   def denormalize(a_hash)
@@ -110,6 +129,19 @@ module HashMapper
     output
   end
 
+  def perform_hash_updating(a_hash, b_hash)
+    a_hash = HashWithIndifferentAccess.new(a_hash)
+    b_hash = HashWithIndifferentAccess.new(b_hash)
+    output = a_hash
+    # Do the mapping
+    maps.each do |m|
+      m.process_update(output, b_hash)
+    end
+    # Return
+    output
+  end
+
+
   # Contains PathMaps
   # Makes them interact
   #
@@ -128,18 +160,16 @@ module HashMapper
         add_value_to_hash!(output, path_2, value)
       end
     end
+    def process_update(hash_to_update, updating_hash)
+      catch :no_value do
+        value = get_value_from_input(hash_to_update, updating_hash, path_from, :normalize)
+        update_value_in_hash!(hash_to_update, path_to, value)
+      end
+    end
     protected
 
     def get_value_from_input(output, input, path, meth)
-      value = path.inject(input) do |h,e|
-        if h.respond_to?(:with_indifferent_access)# this does it, but uses ActiveSupport
-          v = h.with_indifferent_access[e]
-        else
-          v = h[e]
-        end
-        throw :no_value if v.nil?#.has_key?(e)
-        v
-      end
+      value = path.get_value(input)
       delegated_mapper ? delegate_to_nested_mapper(value, meth) : value
     end
 
@@ -154,6 +184,23 @@ module HashMapper
         delegated_mapper.send(meth, value)
       end
     end
+
+    def update_value_in_hash!(hash, path, new_value)
+      path.inject_with_index(hash) do |h,e,i|
+          h[e] = if i == path.size-1
+            old_value = h[e]
+            path.apply_update_filter(old_value, new_value)
+          else
+            if path.segments[i+1].is_a? Integer
+              []
+            else
+              {}
+            end
+        end
+      end
+
+    end
+
 
     def add_value_to_hash!(hash, path, value)
       path.inject_with_index(hash) do |h,e,i|
@@ -189,6 +236,23 @@ module HashMapper
       @path = path.dup
       @segments = parse(path)
       @filter = lambda{|value| value}# default filter does nothing
+    end
+
+    def get_value(input)
+      value = segments.inject(input) do |h,e|
+        if h.respond_to?(:with_indifferent_access)# this does it, but uses ActiveSupport
+          v = h.with_indifferent_access[e]
+        else
+          v = h[e]
+        end
+        throw :no_value if v.nil?#.has_key?(e)
+        v
+      end
+      value
+    end
+
+    def apply_update_filter(value, new_value)
+      @filter.call(value, new_value)
     end
 
     def apply_filter(value)

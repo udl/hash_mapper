@@ -10,4 +10,6 @@ script/generate
 spec/hash_mapper_spec.rb
 spec/spec.opts
 spec/spec_helper.rb
+spec/hash_updating_spec.rb
+spec/path_finding_spec.rb
 tasks/rspec.rake
