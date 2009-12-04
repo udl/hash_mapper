@@ -426,3 +426,19 @@ describe "dealing with strings and symbols" do
   
 end
 
+class SeveralMappingsToSameToPath
+  extend HashMapper
+  map from('/first'), to('elem')
+  map from('/second'),   to('elem')
+end
+
+describe "with several mappings to the same path in the result" do
+
+  it "should retain only the last definition" do
+    SeveralMappingsToSameToPath.maps.size.should == 1
+  end
+  it "should apply only the last definition" do
+    SeveralMappingsToSameToPath.normalize(:first=>1,:second=>2).should == {:elem=>2}
+  end
+end
+

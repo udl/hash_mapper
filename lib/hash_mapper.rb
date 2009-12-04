@@ -51,16 +51,14 @@ module HashMapper
   end
 
   def map(from, to, using=nil, &filter)
+    self.maps.delete_if {|map| map.path_to.path == to.path}
     self.maps << Map.new(from, to, using)
     to.filter = filter if block_given? # Useful if just one block given
   end
-  # find_map_from(from
-  def find_from_paths(path)
-    from_paths = []
-    self.maps.each do |map|
-      from_paths << map.path_from if map.path_to.path == path
-    end
-    from_paths
+  
+  def find_from_path(path)
+    map = self.maps.detect {|map| map.path_to.path == path}
+    map.path_from unless map.nil?
   end
   def find_to_paths(path)
     to_paths = []
